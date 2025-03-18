@@ -1,0 +1,105 @@
+﻿@page "/registroDetalle/{Id:int}"
+@using BlazorApp1.Data
+@using Microsoft.EntityFrameworkCore
+
+@inject IDbContextFactory<ApplicationDbContext> DbContextFactory
+@inject NavigationManager NavigationManager
+
+@using Microsoft.AspNetCore.Identity
+@using BlazorApp1.Data.Models
+
+@inject UserManager<ApplicationUser> UserManager
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IDbContextFactory<ApplicationDbContext> DbContextFactory
+
+    <title>Registros Detallados</title>
+
+<h3>Detalles del Registro</h3>
+
+@if (registro == null)
+{
+    <p>Cargando...</p>
+}
+else
+{
+    <div class="card">
+        <div class="card-body">
+            <h5 class="card-title">Registro #@registro.Id</h5>
+            <p><strong>Cliente:</strong> @registro.Cliente</p>
+            <p><strong>Asunto:</strong> @registro.Asunto</p>
+            <p><strong>Resumen:</strong> @registro.DescCorta</p>
+            <p><strong>Descripción:</strong> @registro.Descripcion</p>
+            <p><strong>Fecha:</strong> @registro.Fecha.ToString("dd/MM/yyyy")</p>
+            <p><strong>Estado:</strong> @registro.Estado</p>
+            <p><strong>Nota:</strong> @registro.Nota</p>
+            <p><strong>Usuario:</strong> @registro.Nombre</p>
+        </div>
+    </div>
+
+    <button class="btn btn-primary" @onclick='() => SetEstado(registro, "Completado")'>Completado</button>
+    <button class="btn btn-primary" @onclick='() => SetEstado(registro, "Pendiente")'>Pendiente</button>
+    <button class="btn btn-primary" @onclick='() => SetEstado(registro, "Reunion")'>Reunion</button>
+
+    <button class="btn btn-secondary" @onclick="Volver">Volver</button>
+}
+
+@code {
+    [Parameter]
+    public int Id { get; set; }
+
+    private Registros? registro;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+            registro = await dbContext.Registros.FindAsync(Id);
+            if (registro == null)
+            {
+                Console.WriteLine($"Registro con ID {Id} no encontrado.");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al cargar el registro: {ex.Message}");
+        }
+    }
+
+    private void Volver()
+    {
+        NavigationManager.NavigateTo("/registroAdmin");
+    }
+
+    private async Task SetEstado(Registros registro, string nuevoEstado)
+    {
+        // Intentar cambiar el estado del registro
+        try
+        {
+            // Crear un contexto para la base de datos
+            await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+
+            // Buscar el registro en la base de datos con su ID
+            var registroDb = await dbContext.Registros.FindAsync(registro.Id);
+            if (registroDb == null)
+            {
+                // Si no se encuentra, mostrar un error en la consola
+                Console.WriteLine("No encontré el registro con ID: " + registro.Id);
+                return;
+            }
+
+            // Cambiar el estado del registro
+            registroDb.Estado = nuevoEstado;
+            await dbContext.SaveChangesAsync(); // Guardar los cambios en la base de datos
+
+            // Actualizar el estado en la lista que estoy mostrando
+            registro.Estado = nuevoEstado;
+            StateHasChanged(); // Refrescar la página para que se vea el cambio
+        }
+        catch (Exception ex)
+        {
+            // Si algo sale mal, mostrar el error
+            Console.WriteLine("Hubo un error: " + ex.Message);
+        }
+    }
+}

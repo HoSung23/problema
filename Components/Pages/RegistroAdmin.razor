@@ -1,0 +1,177 @@
+﻿@page "/registroAdmin"
+@rendermode InteractiveAuto
+@namespace BlazorApp1.Components.Pages
+
+@using BlazorApp1.Components.Pages
+@using BlazorApp1.Data
+@using Microsoft.AspNetCore.Identity
+@using BlazorApp1.Data.Models
+@using Microsoft.EntityFrameworkCore
+@inject NavigationManager NavigationManager
+@inject UserManager<ApplicationUser> UserManager
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IDbContextFactory<ApplicationDbContext> DbContextFactory
+
+<title>Registros (Administrador)</title>
+
+<h3 class="text-center">Registros Enviados</h3>
+
+<!-- Filtros -->
+<div>
+    <label>Cliente:</label>
+    <InputSelect @bind-Value="SelectedCliente" @onchange="ApplyFilters" id="selected-clientes">
+        <option value="">Todos</option>
+        @foreach (var cliente in Clientes)
+        {
+            <option value="@cliente.Nombre">@cliente.Nombre</option>
+        }
+    </InputSelect>
+
+    <label>Asunto:</label>
+    <InputSelect @bind-Value="SelectedAsunto" @onchange="ApplyFilters" id="selected-asunto">
+        <option value="">Todos</option>
+        @foreach (var asunto in Asuntos)
+        {
+            <option value="@asunto.Asuntos">@asunto.Asuntos</option>
+        }
+    </InputSelect>
+
+    <label>Usuario:</label>
+    <InputSelect @bind-Value="SelectedUsuario" @onchange="ApplyFilters" id="selected-usuario">
+        <option value="">Todos</option>
+        @foreach (var usuario in Usuarios)
+        {
+            <option value="@usuario">@usuario</option>
+        }
+    </InputSelect>
+</div>
+
+<!-- Tabla con registros -->
+<table class="table table-striped">
+    <thead>
+        <tr>
+            <th>No.</th>
+            <th>Cliente</th>
+            <th>Asunto</th>
+            <th>Resumen</th>
+            <th>Descripción</th>
+            <th>Fecha</th>
+            <th>Estado</th>
+            <th>Nota</th>
+            <th>Usuario</th>
+            <th>Acciones</th>
+        </tr>
+    </thead>
+    <tbody>
+        @if (FilteredRegistros.Any())
+        {
+            @foreach (var registro in FilteredRegistros)
+            {
+                <tr @onclick="() => VerDetalle(registro.Id)" style="cursor: pointer;">
+                    <td>@registro.Id</td>
+                    <td>@registro.Cliente</td>
+                    <td>@registro.Asunto</td>
+                    <td>@registro.DescCorta</td>
+                    <td>@registro.Descripcion</td>
+                    <td>@registro.Fecha.ToString("dd/MM/yyyy")</td>
+                    <td>@registro.Estado</td>
+                    <td>@registro.Nota</td>
+                    <td>@registro.Nombre</td>
+                    <td>
+                        <!-- Botones para cambiar el estado -->
+                        <button class="btn btn-primary" @onclick='() => SetEstado(registro, "Completado")'>Completado</button>
+						<button class="btn btn-primary" @onclick='() => SetEstado(registro, "Pendiente")'>Pendiente</button>
+						<button class="btn btn-primary" @onclick='() => SetEstado(registro, "Reunion")'>Reunion</button>
+                        <button @onclick="() => VerDetalle(registro.Id)" class="btn btn-warning">Ver Mas</button>
+                    </td>
+                </tr>
+            }
+        }
+        else
+        {
+            <tr>
+                <td colspan="10" class="text-center">No hay registros disponibles</td>
+            </tr>
+        }
+    </tbody>
+</table>
+
+@code {
+    private List<Clientes> Clientes { get; set; } = new();
+    private List<Asunto> Asuntos { get; set; } = new();
+    private List<Registros> AllRegistros { get; set; } = new();
+    private List<Registros> FilteredRegistros { get; set; } = new();
+    private List<string> Usuarios { get; set; } = new();
+
+    private string SelectedCliente { get; set; } = "";
+    private string SelectedAsunto { get; set; } = "";
+    private string SelectedUsuario { get; set; } = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDataAsync();
+    }
+
+    private async Task LoadDataAsync()
+    {
+        try
+        {
+            await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+            Clientes = await dbContext.Clientes.ToListAsync();
+            Asuntos = await dbContext.Asuntos.ToListAsync();
+            AllRegistros = await dbContext.Registros.ToListAsync();
+            FilteredRegistros = AllRegistros;
+            Usuarios = AllRegistros.Select(r => r.Nombre).Distinct().ToList();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine("Error al cargar los datos: " + ex.Message);
+        }
+    }
+
+    private async Task SetEstado(Registros registro, string nuevoEstado)
+    {
+        // Intentar cambiar el estado del registro
+        try
+        {
+            // Crear un contexto para la base de datos
+            await using var dbContext = await DbContextFactory.CreateDbContextAsync();
+
+            // Buscar el registro en la base de datos con su ID
+            var registroDb = await dbContext.Registros.FindAsync(registro.Id);
+            if (registroDb == null)
+            {
+                // Si no se encuentra, mostrar un error en la consola
+                Console.WriteLine("No encontré el registro con ID: " + registro.Id);
+                return;
+            }
+
+            // Cambiar el estado del registro
+            registroDb.Estado = nuevoEstado;
+            await dbContext.SaveChangesAsync(); // Guardar los cambios en la base de datos
+
+            // Actualizar el estado en la lista que estoy mostrando
+            registro.Estado = nuevoEstado;
+            StateHasChanged(); // Refrescar la página para que se vea el cambio
+        }
+        catch (Exception ex)
+        {
+            // Si algo sale mal, mostrar el error
+            Console.WriteLine("Hubo un error: " + ex.Message);
+        }
+    }
+
+    private void ApplyFilters()
+    {
+        FilteredRegistros = AllRegistros
+            .Where(r => (string.IsNullOrEmpty(SelectedCliente) || r.Cliente == SelectedCliente) &&
+                        (string.IsNullOrEmpty(SelectedAsunto) || r.Asunto == SelectedAsunto) &&
+                        (string.IsNullOrEmpty(SelectedUsuario) || r.Nombre == SelectedUsuario))
+            .ToList();
+    }
+
+    private void VerDetalle(int id)
+    {
+        NavigationManager.NavigateTo($"/registroDetalle/{id}");
+    }
+}
